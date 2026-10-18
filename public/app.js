@@ -44,7 +44,15 @@ function wsUrl() {
 
 function connect(onOpen) {
   wantReconnect = true;
-  if (ws && (ws.readyState === 0 || ws.readyState === 1)) { onOpen?.(); return; }
+  if (ws && (ws.readyState === 0 || ws.readyState === 1)) {
+    // Re-using a live socket. If it is still CONNECTING, the 'open' listener below will
+    // call rejoin() and then onOpen. If it is already OPEN the 'open' event will never
+    // fire again, so rejoin() (and onOpen) must run here — otherwise a page that boots
+    // with a warm socket (second tab, deep link, refresh) sends nothing and hangs.
+    if (ws.readyState === 1 && wsCode) rejoin();
+    onOpen?.();
+    return;
+  }
   ws = new WebSocket(wsUrl());
   ws.addEventListener('open', () => {
     reconnectDelay = 500;
@@ -91,8 +99,8 @@ function rejoin() {
 function handleServerMessage(msg) {
   switch (msg.type) {
     case 'created':
-      wsCode = msg.game.code; wsRole = 'host'; wsHostToken = msg.hostToken;
-      store.set('hostToken:' + msg.game.code, msg.hostToken);
+      wsCode = msg.game.code; wsRole = 'host'; wsHostToken = msg.you.hostToken;
+      store.set('hostToken:' + msg.game.code, msg.you.hostToken);
       state = { you: msg.you, game: msg.game };
       lastDrawCount = state.game.draws.length;
       view = 'host'; render();
@@ -106,7 +114,12 @@ function handleServerMessage(msg) {
       break;
     case 'state':
       if (msg.game.code !== wsCode) return;
-      if (msg.you) state.you = msg.you;
+      if (msg.you) {
+        state.you = msg.you;
+        // A joinHost reply carries the full host identity; adopt its view so a resumed
+        // session (second tab, refresh) renders the host screen instead of the home form.
+        if (msg.you.isHost) view = 'host';
+      }
       state.game = msg.game;
       onNewDraws();
       render();

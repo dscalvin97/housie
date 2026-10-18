@@ -1,5 +1,5 @@
 // Housie service worker — cache the app shell, let the game WebSocket pass through.
-const CACHE = 'housie-v3';
+const CACHE = 'housie-v4';
 const SHELL = [
   '/',
   '/index.html',
