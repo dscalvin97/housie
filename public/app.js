@@ -616,6 +616,7 @@ function openTicketSheet(patternId, tickets) {
 
 // ============================================================ ROUTER + BOOT
 function render() {
+  if (view === 'create') { viewCreate(); return; }
   if (!state.game) { viewHome(); return; }
   if (view === 'host') { viewHost(); return; }
   viewPlayer();

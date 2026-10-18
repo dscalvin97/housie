@@ -1,0 +1,15 @@
+services:
+  housie:
+    build: .
+    container_name: housie
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:3909:3909"
+    volumes:
+      - housie-data:/data
+    environment:
+      - PORT=3909
+      - DB_PATH=/data/housie.db
+
+volumes:
+  housie-data:
