@@ -1,0 +1,15 @@
+{
+  "name": "housie",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Real-time multiplayer Housie (Indian Tambola) PWA",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node test/selfcheck.js",
+    "icons": "node scripts/make-icons.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
