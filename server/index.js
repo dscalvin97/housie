@@ -29,12 +29,21 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
+// Pure modules the browser imports directly (no Node APIs inside).
+const SHARED = {
+  '/patterns.js': fileURLToPath(new URL('./patterns.js', import.meta.url)),
+};
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   let path = url.pathname;
   if (path === '/healthz') { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('ok'); }
 
   if (path === '/') path = '/index.html';
+  if (SHARED[path]) {
+    res.writeHead(200, { 'content-type': MIME['.js'], 'cache-control': 'no-cache' });
+    return res.end(readFileSync(SHARED[path]));
+  }
   const file = normalize(join(ROOT, path));
   if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end(); }
   if (!existsSync(file) || !statSync(file).isFile()) {
@@ -177,7 +186,7 @@ function handle(ws, msg) {
       if (!game || msg.hostToken !== game.hostToken) return send(ws, { type: 'error', message: 'Not authorized as host' });
       joinClients(ws, game.code);
       ws.role = 'host';
-      send(ws, hostState(game));
+      send(ws, { type: 'state', ...hostState(game) });
       break;
     }
     case 'join': {
