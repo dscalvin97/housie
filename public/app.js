@@ -108,6 +108,7 @@ function handleServerMessage(msg) {
     case 'joined':
       wsCode = msg.game.code; wsRole = 'player';
       store.set('token:' + msg.game.code, msg.token);
+      store.del('pendingJoin'); // consumed; a later plain visit should land on home
       state = { you: msg.you, game: msg.game };
       lastDrawCount = state.game.draws.length;
       view = 'player'; render();
@@ -213,6 +214,7 @@ function viewHome() {
     if (!nameInput.value.trim()) return toast('Enter your name first', 'bad');
     if (code.length !== 6) return toast('Enter the 6-letter code', 'bad');
     saveName();
+    store.del('pendingJoin'); // consumed; a later plain visit should land on home
     wsRole = 'player'; wsCode = code;
     connect(); // open handler rejoin()s with the right token/name
   });
@@ -642,17 +644,22 @@ function tickCountdown() {
 setInterval(tickCountdown, 500);
 
 function boot() {
-  // deep link: ?join=CODE
+  // deep link: ?join=CODE. Keep the code as a pending intent even when we cannot
+  // join yet, so the home form can still submit it after the name is entered.
   const params = new URLSearchParams(location.search);
   const joinCode = params.get('join');
-  if (joinCode && joinCode.length === 6) {
-    const name = store.get('name', '');
-    if (!name) { viewHome(); toast('Enter your name to join'); return; }
-    wsRole = 'player'; wsCode = joinCode.toUpperCase();
-    connect();
+  if (joinCode && joinCode.length === 6) store.set('pendingJoin', joinCode.toUpperCase());
+
+  const target = (joinCode && joinCode.length === 6 ? joinCode : store.get('pendingJoin', '')).toUpperCase();
+
+  // an explicit join link always wins — it is how the host's own phone plays too,
+  // so it must not be swallowed by the lastHost resume below
+  if (target) {
+    wsRole = 'player'; wsCode = target; connect();
     return;
   }
-  // resume a host session
+
+  // resume a host session when there is no pending join
   const lastHost = store.get('lastHost', null);
   if (lastHost?.code && lastHost?.hostToken) {
     wsRole = 'host'; wsCode = lastHost.code; wsHostToken = lastHost.hostToken;
