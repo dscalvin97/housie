@@ -6,6 +6,9 @@ import {
   findPlayer, submitClaim, computeLedger, CLAIMABLE_PATTERNS,
 } from './game.js';
 
+// joining is unauthenticated, so a game needs a ceiling
+const MAX_PLAYERS_PER_GAME = 100;
+
 // ---- state shaping ----
 export function publicState(game) {
   return {
@@ -147,16 +150,24 @@ export function createHub({ games, save, broadcast, setTimer, clearTimer }) {
       }
       case 'setHouseReward': {
         if (!isHost) return client.send({ type: 'error', message: 'Host only' });
+        // hasOwn guard: houses["__proto__"] resolves to Array.prototype, so an unvalidated
+        // index would write the reward onto every array in the process
+        if (!Number.isInteger(msg.index) || !Object.hasOwn(game.config.houses, msg.index)) {
+          return client.send({ type: 'error', message: 'No such house' });
+        }
         const h = game.config.houses[msg.index];
-        if (!h) return client.send({ type: 'error', message: 'No such house' });
         h.reward = msg.reward;
         save(game); broadcast(game);
         break;
       }
       case 'setPattern': {
         if (!isHost) return client.send({ type: 'error', message: 'Host only' });
+        // hasOwn guard: patterns["__proto__"] resolves to Object.prototype, so an
+        // unvalidated id would write enabled/reward onto every object in the process
+        if (typeof msg.patternId !== 'string' || !Object.hasOwn(game.config.patterns, msg.patternId)) {
+          return client.send({ type: 'error', message: 'No such pattern' });
+        }
         const p = game.config.patterns[msg.patternId];
-        if (!p) return client.send({ type: 'error', message: 'No such pattern' });
         if (msg.enabled !== undefined) p.enabled = !!msg.enabled;
         if (msg.reward) p.reward = msg.reward;
         save(game); broadcast(game);
@@ -206,9 +217,14 @@ export function createHub({ games, save, broadcast, setTimer, clearTimer }) {
         // tally); only NEW players are turned away once the game is over
         let player = msg.token ? findPlayer(game, msg.token) : null;
         if (!player && game.status === 'finished') return client.send({ type: 'error', message: 'Game already finished' });
+        // joining is unauthenticated, so cap new players or one client can spam 500 joins
+        // and grow the broadcast payload and sqlite writes without bound
+        if (!player && game.players.length >= MAX_PLAYERS_PER_GAME) return client.send({ type: 'error', message: 'Game is full' });
         if (!player) player = addPlayer(game, msg.name);
         client.join(game.code);
-        client.role = 'player';
+        // a host socket may also join as a player (to hold a ticket), but must keep its
+        // host role or it permanently loses start/skip/pause for the rest of the session
+        if (client.role !== 'host') client.role = 'player';
         client.playerId = player.id;
         touch(game);
         save(game);

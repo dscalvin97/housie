@@ -142,6 +142,11 @@ export function submitClaim(game, player, patternId, ticketId) {
 
   const isHouse = patternId === 'fullHouse';
   if (!isHouse && !CLAIMABLE_PATTERNS.includes(patternId)) return { ok: false, result: 'rejected', message: 'Unknown pattern' };
+  // a pattern the host switched off must not be playable, or players can claim (and be
+  // paid for) patterns the host explicitly excluded from the game
+  if (!isHouse && game.config.patterns?.[patternId] && game.config.patterns[patternId].enabled === false) {
+    return { ok: false, result: 'rejected', message: 'That pattern is not enabled in this game' };
+  }
   const pat = PATTERNS[patternId];
 
   const ticket = player.tickets.find(t => t.id === ticketId);

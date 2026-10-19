@@ -77,6 +77,12 @@ wss.on('connection', (ws) => {
     role: null, playerId: null, code: null,
     send: (obj) => { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); },
     join: (code) => {
+      // a socket may only belong to one game: unsubscribe from the previous one, or it
+      // keeps receiving that game's broadcasts and leaks in the old Set forever
+      if (client.code && client.code !== code) {
+        const prev = clients.get(client.code);
+        if (prev) { prev.delete(ws); if (prev.size === 0) clients.delete(client.code); }
+      }
       client.code = code;
       if (!clients.has(code)) clients.set(code, new Set());
       clients.get(code).add(ws);

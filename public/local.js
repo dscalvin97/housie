@@ -42,10 +42,14 @@ function post(msg) {
 // One client view per sending tab, kept so role/playerId/code survive across messages.
 // (A fresh object per message would forget who the sender is on every action.)
 const clientsByTab = new Map();
+// forging 'from' is trivial on a shared channel, so bound this map or a flood of fake
+// ids grows it without limit. Real tabs number in the tens; 256 is generous headroom.
+const MAX_TAB_CLIENTS = 256;
 
 function clientFor(replyTo) {
   let c = clientsByTab.get(replyTo);
   if (!c) {
+    if (clientsByTab.size >= MAX_TAB_CLIENTS) return null; // drop: cannot grow without bound
     c = {
       role: null, playerId: null, code: null,
       // reply locally when the requester is this tab; post otherwise
@@ -65,6 +69,7 @@ function deliver(obj) {
 
 function handleHubMessage(payload, replyTo) {
   const client = clientFor(replyTo);
+  if (!client) return; // map is full; drop rather than grow without bound
   try { hub.handle(client, payload); } catch (err) { console.error('hub error', err); client.send({ type: 'error', message: 'Server error' }); }
 }
 
@@ -73,9 +78,10 @@ channel.onmessage = (ev) => {
   if (!msg || !msg.__housie || msg.from === clientId) return;
 
   if (msg.to === 'hub') {
-    // only the owning tab answers; a create claim makes this tab the owner
-    if (!isHub && msg.payload?.type !== 'create') return;
-    if (msg.payload?.type === 'create') isHub = true;
+    // only the owning tab answers. a tab becomes the hub by SENDING 'create' itself
+    // (see _post) — never by receiving one, or a single forged 'create' would flip
+    // every tab into its own hub and sever them all from the real game.
+    if (!isHub) return;
     handleHubMessage(msg.payload, msg.from);
     return;
   }
