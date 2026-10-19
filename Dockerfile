@@ -8,6 +8,7 @@ RUN npm install --omit=dev
 
 COPY server ./server
 COPY public ./public
+COPY shared ./shared
 
 ENV PORT=3909 DB_PATH=/data/housie.db
 EXPOSE 3909

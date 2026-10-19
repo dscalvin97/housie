@@ -1,21 +1,16 @@
 // Housie service worker — cache the app shell, let the game WebSocket pass through.
-const CACHE = 'housie-v4';
-const SHELL = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/app.js',
-  '/manifest.webmanifest',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/apple-touch-icon.png',
-  '/icons/maskable-512.png',
-];
+const CACHE = 'housie-v6';
+// Precache only the entry document. ES modules (app.js, local.js, shared/*) are picked up
+// by the cache-first fetch handler below as the browser requests them — precaching them
+// here would silently rot every time a module is added or moved.
+const SHELL = ['./', './index.html'];
 
 self.addEventListener('install', (e) => {
+  // addAll rejects atomically on a single 404; fetch each independently so one bad URL
+  // cannot leave the SW permanently stuck in "waiting".
   e.waitUntil(
     caches.open(CACHE)
-      .then((c) => c.addAll(SHELL))
+      .then((c) => Promise.all(SHELL.map((u) => c.add(u).catch(() => {}))))
       .then(() => self.skipWaiting())
   );
 });
@@ -40,10 +35,10 @@ self.addEventListener('fetch', (e) => {
       fetch(request)
         .then((res) => {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('/index.html', copy));
+          caches.open(CACHE).then((c) => c.put('./index.html', copy));
           return res;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match('./index.html'))
     );
     return;
   }

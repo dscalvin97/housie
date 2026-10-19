@@ -1,9 +1,9 @@
-import { generateTicket, generateTickets } from '../server/tickets.js';
-import { PATTERNS, completionDraw, patternNumbers } from '../server/patterns.js';
+import { generateTicket, generateTickets } from '../shared/tickets.js';
+import { PATTERNS, completionDraw, patternNumbers } from '../shared/patterns.js';
 import {
   createGame, addPlayer, buyTickets, startGame, drawNext, submitClaim,
   computeLedger, finishGame,
-} from '../server/game.js';
+} from '../shared/game.js';
 
 let passed = 0, failed = 0;
 function ok(cond, name) {

@@ -1,5 +1,6 @@
 // Housie PWA client. Vanilla JS, single file. Talks to /ws.
-import { PATTERNS } from '/patterns.js';
+import { PATTERNS } from './shared/patterns.js';
+import { makeLocalSocket } from './local.js';
 
 const app = document.getElementById('app');
 const toastEl = document.getElementById('toast');
@@ -53,7 +54,8 @@ function connect(onOpen) {
     onOpen?.();
     return;
   }
-  ws = new WebSocket(wsUrl());
+  // static (GitHub Pages) build runs the hub in-browser over BroadcastChannel
+  ws = window.HOUSIE_STATIC ? makeLocalSocket() : new WebSocket(wsUrl());
   ws.addEventListener('open', () => {
     reconnectDelay = 500;
     // re-authenticate after a reconnect so a phone waking from sleep rejoins its room
@@ -430,7 +432,9 @@ function hostLobby(game) {
   }
 
   $('#copyLink', el).addEventListener('click', async () => {
-    const link = `${location.origin}/?join=${game.code}`;
+    // Path form, not ?join=: survives iOS standalone launches, which drop location.search.
+    // Base is the app's own directory, so this works on GitHub Pages subpaths too.
+    const link = `${location.origin}${location.pathname.replace(/\/join\/[A-Za-z0-9]{6}\/?$/, '/').replace(/\/index\.html$/, '/')}join/${game.code}`;
     try { await navigator.clipboard.writeText(link); toast('Link copied', 'good'); } catch { prompt('Copy this link:', link); }
   });
   $('#start', el).addEventListener('click', () => send({ type: 'start' }));
@@ -644,11 +648,13 @@ function tickCountdown() {
 setInterval(tickCountdown, 500);
 
 function boot() {
-  // deep link: ?join=CODE. Keep the code as a pending intent even when we cannot
-  // join yet, so the home form can still submit it after the name is entered.
+  // Deep link: ?join=CODE or /join/CODE. The path form survives iOS standalone launches,
+  // which drop location.search when a link opens inside the installed app.
   const params = new URLSearchParams(location.search);
-  const joinCode = params.get('join');
-  if (joinCode && joinCode.length === 6) store.set('pendingJoin', joinCode.toUpperCase());
+  const pathMatch = location.pathname.match(/\/join\/([A-Za-z0-9]{6})/);
+  const raw = params.get('join') || (pathMatch && pathMatch[1]);
+  const joinCode = raw && raw.length === 6 ? raw : null;
+  if (joinCode) store.set('pendingJoin', joinCode.toUpperCase());
 
   const target = (joinCode && joinCode.length === 6 ? joinCode : store.get('pendingJoin', '')).toUpperCase();
 
@@ -676,7 +682,7 @@ setInterval(() => {
 
 // clear lastHost when host room finishes? keep it — rejoining a finished room shows the tally.
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
 
 connect(() => boot());

@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server/index.js",
     "test": "node test/selfcheck.js",
-    "icons": "node scripts/make-icons.js"
+    "icons": "node scripts/make-icons.js",
+    "build:static": "rm -rf public/shared dist && cp -r shared public/shared && cp -r public dist && node scripts/stamp-static.js"
   },
   "dependencies": {
     "ws": "^8.18.0"
